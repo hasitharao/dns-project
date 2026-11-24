@@ -9,7 +9,7 @@ heading() { printf '\n== %s ==\n' "$1"; }
 
 lookup() {
   printf '$ dig %s\n' "$*"
-  dig "$@" +noall +answer
+  dig +nocmd "$@" +noall +answer
 }
 
 status() {
@@ -33,7 +33,7 @@ lookup "app.$DOMAIN" -t CNAME
 lookup "app.$DOMAIN" -t A
 
 heading "Practice A record (placeholder IP)"
-lookup "test.$DOMAIN" -t A
+lookup @1.1.1.1 "test.$DOMAIN" -t A
 
 heading "Same answer from two public resolvers?"
 lookup @1.1.1.1 "$DOMAIN" -t A

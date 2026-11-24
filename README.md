@@ -36,7 +36,7 @@ I had no payment method to use for this project, so I changed two things. Everyt
 1. In Cloudflare, choose **Add a domain** and enter `qx7k9mzt2vw.dpdns.org`.
 2. Pick the **Free** plan. Cloudflare shows two nameservers.
 3. Back at DigitalPlat, paste those two nameservers into the domain's nameserver fields and save.
-4. Wait until Cloudflare shows the domain as **Active**. This took me <!-- TODO: how long --> .
+4. Wait until Cloudflare shows the domain as **Active**. This took me under two minutes.
 
 ![Cloudflare shows Active](docs/img/02-cloudflare-active.png)
 
@@ -95,7 +95,7 @@ dig qx7k9mzt2vw.dpdns.org +noall +answer -t AAAA
 dig www.qx7k9mzt2vw.dpdns.org +noall +answer
 ```
 
-When **Settings → Pages** shows a green DNS check, tick **Enforce HTTPS**. The certificate can take a few minutes to appear. DNS changes can take up to 24 hours to propagate, though mine took <!-- TODO: how long --> .
+When **Settings → Pages** shows a green DNS check, tick **Enforce HTTPS**. The certificate can take a few minutes to appear. DNS changes can take up to 24 hours to propagate, though mine took a short while (I did not time it).
 
 ![Pages DNS check passed and HTTPS enforced](docs/img/05-pages-https.png)
 
@@ -113,8 +113,8 @@ Create `/opt/homebrew/etc/nginx/servers/app.conf`. Replace `YOUR_MAC_USER` with 
 
 ```nginx
 server {
-    listen 8080;
-    server_name app.qx7k9mzt2vw.dpdns.org localhost;
+    listen 8080 default_server;
+    server_name app.qx7k9mzt2vw.dpdns.org;
     root /Users/YOUR_MAC_USER/dns-project;
     index index.html;
 
@@ -126,7 +126,7 @@ server {
 
 ```bash
 nginx -t && brew services start nginx
-curl -I http://localhost:8080        # expect HTTP/1.1 200 OK
+curl -I -H "Host: app.qx7k9mzt2vw.dpdns.org" http://localhost:8080        # expect HTTP/1.1 200 OK
 ```
 
 ### Publish it with a Cloudflare Tunnel
@@ -212,4 +212,8 @@ Stop the tunnel with Ctrl+C and run `brew services stop nginx`. Nothing here bil
 
 ## What I learned
 
-<!-- TODO: add three or four sentences in your own words, for example: what a TTL controls, why the apex needs A records while www uses a CNAME, why a proxied record hides the origin IP, and what broke along the way. -->
+The apex domain uses A and AAAA records because a CNAME can't share the zone root with other records, while `www` is a CNAME to `hasitharao.github.io` so GitHub can change its servers without me touching DNS. The page shows a TTL of 300 seconds, which is Cloudflare's Auto setting: resolvers may cache an answer that long before asking again. The `app` record is proxied, so `dig` returns Cloudflare's addresses and not my laptop's, and the tunnel only makes outbound connections, so I opened no ports on my router.
+
+A new record can stay invisible for a while. My resolver had cached the earlier "this name doesn't exist" answer, so `dig` showed nothing for `test` even though Cloudflare's nameserver returned it immediately. Asking the authoritative nameserver or another public resolver showed the record was there.
+
+Things that went wrong: most of the names I tried at DigitalPlat were refused until I tried a random one; nginx kept showing its default welcome page because it picks a server block by hostname, so I had to test with a `Host` header; and my first tunnel config had a placeholder ID in it, which `cloudflared` rejected until I used the real one.
