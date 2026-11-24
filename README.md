@@ -118,6 +118,7 @@ server {
     root /Users/YOUR_MAC_USER/dns-project;
     index index.html;
 
+    location ~ /\. { deny all; }
     location / {
         try_files $uri $uri/ =404;
     }
@@ -217,3 +218,5 @@ The apex domain uses A and AAAA records because a CNAME can't share the zone roo
 A new record can stay invisible for a while. My resolver had cached the earlier "this name doesn't exist" answer, so `dig` showed nothing for `test` even though Cloudflare's nameserver returned it immediately. Asking the authoritative nameserver or another public resolver showed the record was there.
 
 Things that went wrong: most of the names I tried at DigitalPlat were refused until I tried a random one; nginx kept showing its default welcome page because it picks a server block by hostname, so I had to test with a `Host` header; and my first tunnel config had a placeholder ID in it, which `cloudflared` rejected until I used the real one.
+
+I also found that serving the whole project folder through the tunnel exposed `/.git/config` (HTTP 200). A `location ~ /\. { deny all; }` rule in nginx turned that into a 403.
