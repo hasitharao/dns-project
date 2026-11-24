@@ -1,0 +1,144 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Found by DNS</title>
+<style>
+  :root {
+    --paper: #f1f5f8;
+    --ink: #14212b;
+    --muted: #4c5f6d;
+    --line: #c5d1da;
+    --signal: #1b5bb8;
+    --ttl: #9a5b00;
+    color-scheme: light dark;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --paper: #0e1920;
+      --ink: #e4ecf2;
+      --muted: #9db0bd;
+      --line: #2a3b47;
+      --signal: #7db2ff;
+      --ttl: #f0b44c;
+    }
+  }
+
+  * { box-sizing: border-box; }
+  html { background: var(--paper); }
+  body {
+    margin: 0;
+    min-height: 100vh;
+    padding: clamp(1.5rem, 6vw, 4.5rem);
+    background: var(--paper);
+    color: var(--ink);
+    font: 1.0625rem/1.6 system-ui, -apple-system, "Segoe UI", sans-serif;
+  }
+  main { max-width: 42rem; }
+
+  h1 {
+    margin: 0 0 1.25rem;
+    font: 600 clamp(2.2rem, 7vw, 3.6rem)/1.08 "Iowan Old Style", "Palatino Linotype", Palatino, Georgia, serif;
+    letter-spacing: -0.01em;
+  }
+  p { margin: 0 0 1.5rem; max-width: 36rem; }
+  #host {
+    color: var(--signal);
+    font: 500 0.95em ui-monospace, "SF Mono", Menlo, monospace;
+    overflow-wrap: anywhere;
+  }
+
+  .table-wrap { overflow-x: auto; margin-bottom: 1rem; }
+  table { width: 100%; border-collapse: collapse; font: 0.95rem/1.5 ui-monospace, "SF Mono", Menlo, monospace; }
+  caption { text-align: left; padding-bottom: 0.5rem; color: var(--muted); font: 0.95rem/1.5 system-ui, sans-serif; }
+  th, td { padding: 0.55rem 1rem 0.55rem 0; text-align: left; border-top: 1px solid var(--line); vertical-align: top; }
+  th { color: var(--muted); font-weight: 500; }
+  tbody tr:last-child td, tbody tr:last-child th { border-bottom: 1px solid var(--line); }
+  td:nth-child(2) { overflow-wrap: anywhere; }
+  .ttl { color: var(--ttl); white-space: nowrap; }
+
+  .note { color: var(--muted); font-size: 0.95rem; }
+  footer { margin-top: 3rem; color: var(--muted); font-size: 0.9rem; }
+</style>
+</head>
+<body>
+<main>
+  <h1>You found this page by asking DNS.</h1>
+  <p>Before anything loaded, your browser asked where <code id="host">this hostname</code> lives. Here is the answer, fetched again just now.</p>
+
+  <div class="table-wrap">
+    <table id="records">
+      <caption>Live answers from Cloudflare’s public resolver</caption>
+      <thead>
+        <tr><th scope="col">Type</th><th scope="col">Answer</th><th scope="col">TTL</th></tr>
+      </thead>
+      <tbody aria-live="polite">
+        <tr><td colspan="3">Looking up…</td></tr>
+      </tbody>
+    </table>
+  </div>
+  <p class="note">TTL is how many seconds a resolver may reuse an answer before it asks again.</p>
+
+  <footer>Built for the roadmap.sh Basic DNS Setup project.</footer>
+</main>
+
+<script>
+  const host = location.hostname;
+  document.getElementById('host').textContent = host || 'this file';
+
+  const body = document.querySelector('#records tbody');
+  const typeNames = { 1: 'A', 5: 'CNAME', 28: 'AAAA' };
+
+  function row(cells) {
+    const tr = document.createElement('tr');
+    cells.forEach((text, i) => {
+      const td = document.createElement('td');
+      td.textContent = text;
+      if (i === 2) td.className = 'ttl';
+      tr.append(td);
+    });
+    return tr;
+  }
+
+  function note(text) {
+    const tr = document.createElement('tr');
+    const td = document.createElement('td');
+    td.colSpan = 3;
+    td.textContent = text;
+    tr.append(td);
+    body.replaceChildren(tr);
+  }
+
+  async function ask(type) {
+    const url = 'https://cloudflare-dns.com/dns-query?name=' + encodeURIComponent(host) + '&type=' + type;
+    const res = await fetch(url, { headers: { accept: 'application/dns-json' } });
+    if (!res.ok) throw new Error('HTTP ' + res.status);
+    return (await res.json()).Answer || [];
+  }
+
+  (async () => {
+    const isLocal = !host || host === 'localhost' || /^127\./.test(host) || /^\d+\.\d+\.\d+\.\d+$/.test(host);
+    if (isLocal) {
+      note('Open this page through your domain name to see its live records.');
+      return;
+    }
+    try {
+      const [a, aaaa] = await Promise.all([ask('A'), ask('AAAA')]);
+      const seen = new Set();
+      const rows = [];
+      [...a, ...aaaa].forEach((ans) => {
+        const key = ans.type + ans.data;
+        if (!typeNames[ans.type] || seen.has(key)) return;
+        seen.add(key);
+        rows.push(row([typeNames[ans.type], ans.data, ans.TTL + ' s']));
+      });
+      if (rows.length) body.replaceChildren(...rows);
+      else note('No answers yet. DNS may still be propagating, so try again in a few minutes.');
+    } catch (err) {
+      note('The lookup didn’t complete. Check your connection and reload the page.');
+    }
+  })();
+</script>
+</body>
+</html>
